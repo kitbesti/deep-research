@@ -5,8 +5,8 @@ import pLimit from 'p-limit';
 import { z } from 'zod';
 
 import { o3MiniModel, trimPrompt } from './ai/providers';
-import { systemPrompt } from './prompt';
 import { OutputManager } from './output-manager';
+import { systemPrompt } from './prompt';
 
 // Initialize output manager for coordinated console/progress output
 const output = new OutputManager();
@@ -58,13 +58,21 @@ async function generateSerpQueries({
   const res = await generateObject({
     model: o3MiniModel,
     system: systemPrompt(),
-    prompt: `Given the following prompt from the user, generate a list of SERP queries to research the topic. The queries should be in ${researchLanguage}. Return a maximum of ${numQueries} queries, but feel free to return less if the original prompt is clear. Make sure each query is unique and not similar to each other: <prompt>${query}</prompt>\n\n${
-      learnings
-        ? `Here are some learnings from previous research, use them to generate more specific queries: ${learnings.join(
-            '\n',
-          )}`
-        : ''
-    }`,
+    prompt: `
+      Given the following prompt from the user, generate a list of SERP queries to research the topic.
+      The queries should be in ${researchLanguage}.
+      Return a maximum of ${numQueries} queries, but feel free to return less if the original prompt is clear.
+      Make sure each query is unique and not similar to each other:
+
+      <prompt>${query}</prompt>
+
+      ${
+        learnings
+          ? `Here are some learnings from previous research, use them to generate more specific queries:
+           ${learnings.join('\n')}`
+          : ''
+      }
+    `,
     schema: z.object({
       queries: z
         .array(
@@ -80,10 +88,7 @@ async function generateSerpQueries({
         .describe(`List of SERP queries, max of ${numQueries}`),
     }),
   });
-  log(
-    `Created ${res.object.queries.length} queries`,
-    res.object.queries,
-  );
+  log(`Created ${res.object.queries.length} queries`, res.object.queries);
 
   return res.object.queries.slice(0, numQueries);
 }
@@ -110,9 +115,17 @@ async function processSerpResult({
     model: o3MiniModel,
     abortSignal: AbortSignal.timeout(60_000),
     system: systemPrompt(),
-    prompt: `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. The learnings and follow-up questions should be in ${researchLanguage}. Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. Make sure each learning is unique and not similar to each other. The learnings should be concise and to the point, as detailed and information dense as possible. Make sure to include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.\n\n<contents>${contents
-      .map(content => `<content>\n${content}\n</content>`)
-      .join('\n')}</contents>`,
+    prompt: `
+      Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents.
+      The learnings and follow-up questions should be in ${researchLanguage}.
+      Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear.
+      Make sure each learning is unique and not similar to each other.
+      The learnings should be concise and to the point, as detailed and information dense as possible.
+      Make sure to include any entities like people, places, companies, products, things, etc in the learnings,
+      as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.
+
+      <contents>${contents.map(content => `<content>\n${content}\n</content>`).join('\n')}</contents>
+    `,
     schema: z.object({
       learnings: z
         .array(z.string())
@@ -124,10 +137,7 @@ async function processSerpResult({
         ),
     }),
   });
-  log(
-    `Created ${res.object.learnings.length} learnings`,
-    res.object.learnings,
-  );
+  log(`Created ${res.object.learnings.length} learnings`, res.object.learnings);
 
   return res.object;
 }
@@ -193,7 +203,7 @@ export async function deepResearch({
     totalQueries: 0,
     completedQueries: 0,
   };
-  
+
   const reportProgress = (update: Partial<ResearchProgress>) => {
     Object.assign(progress, update);
     onProgress?.(progress);
@@ -205,12 +215,12 @@ export async function deepResearch({
     numQueries: breadth,
     researchLanguage,
   });
-  
+
   reportProgress({
     totalQueries: serpQueries.length,
-    currentQuery: serpQueries[0]?.query
+    currentQuery: serpQueries[0]?.query,
   });
-  
+
   const limit = pLimit(ConcurrencyLimit);
 
   const results = await Promise.all(
@@ -250,9 +260,9 @@ export async function deepResearch({
             });
 
             const nextQuery = `
-            Previous research goal: ${serpQuery.researchGoal}
-            Follow-up research directions: ${newLearnings.followUpQuestions.map(q => `\n${q}`).join('')}
-          `.trim();
+              Previous research goal: ${serpQuery.researchGoal}
+              Follow-up research directions: ${newLearnings.followUpQuestions.map(q => `\n${q}`).join('')}
+            `.trim();
 
             return deepResearch({
               query: nextQuery,
