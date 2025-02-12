@@ -46,17 +46,19 @@ async function generateSerpQueries({
   query,
   numQueries = 3,
   learnings,
+  researchLanguage,
 }: {
   query: string;
   numQueries?: number;
 
   // optional, if provided, the research will continue from the last learning
   learnings?: string[];
+  researchLanguage: string;
 }) {
   const res = await generateObject({
     model: o3MiniModel,
     system: systemPrompt(),
-    prompt: `Given the following prompt from the user, generate a list of SERP queries to research the topic. Return a maximum of ${numQueries} queries, but feel free to return less if the original prompt is clear. Make sure each query is unique and not similar to each other: <prompt>${query}</prompt>\n\n${
+    prompt: `Given the following prompt from the user, generate a list of SERP queries to research the topic. The queries should be in ${researchLanguage}. Return a maximum of ${numQueries} queries, but feel free to return less if the original prompt is clear. Make sure each query is unique and not similar to each other: <prompt>${query}</prompt>\n\n${
       learnings
         ? `Here are some learnings from previous research, use them to generate more specific queries: ${learnings.join(
             '\n',
@@ -91,11 +93,13 @@ async function processSerpResult({
   result,
   numLearnings = 3,
   numFollowUpQuestions = 3,
+  researchLanguage,
 }: {
   query: string;
   result: SearchResponse;
   numLearnings?: number;
   numFollowUpQuestions?: number;
+  researchLanguage: string;
 }) {
   const contents = compact(result.data.map(item => item.markdown)).map(
     content => trimPrompt(content, 25_000),
@@ -106,7 +110,7 @@ async function processSerpResult({
     model: o3MiniModel,
     abortSignal: AbortSignal.timeout(60_000),
     system: systemPrompt(),
-    prompt: `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. Make sure each learning is unique and not similar to each other. The learnings should be concise and to the point, as detailed and information dense as possible. Make sure to include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.\n\n<contents>${contents
+    prompt: `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. The learnings and follow-up questions should be in ${researchLanguage}. Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. Make sure each learning is unique and not similar to each other. The learnings should be concise and to the point, as detailed and information dense as possible. Make sure to include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.\n\n<contents>${contents
       .map(content => `<content>\n${content}\n</content>`)
       .join('\n')}</contents>`,
     schema: z.object({
@@ -170,6 +174,7 @@ export async function deepResearch({
   depth,
   learnings = [],
   visitedUrls = [],
+  researchLanguage,
   onProgress,
 }: {
   query: string;
@@ -177,6 +182,7 @@ export async function deepResearch({
   depth: number;
   learnings?: string[];
   visitedUrls?: string[];
+  researchLanguage: string;
   onProgress?: (progress: ResearchProgress) => void;
 }): Promise<ResearchResult> {
   const progress: ResearchProgress = {
@@ -197,6 +203,7 @@ export async function deepResearch({
     query,
     learnings,
     numQueries: breadth,
+    researchLanguage,
   });
   
   reportProgress({
@@ -225,6 +232,7 @@ export async function deepResearch({
             query: serpQuery.query,
             result,
             numFollowUpQuestions: newBreadth,
+            researchLanguage,
           });
           const allLearnings = [...learnings, ...newLearnings.learnings];
           const allUrls = [...visitedUrls, ...newUrls];
@@ -252,6 +260,7 @@ export async function deepResearch({
               depth: newDepth,
               learnings: allLearnings,
               visitedUrls: allUrls,
+              researchLanguage,
               onProgress,
             });
           } else {
@@ -267,12 +276,9 @@ export async function deepResearch({
           }
         } catch (e: any) {
           if (e.message && e.message.includes('Timeout')) {
-            log(
-              `Timeout error running query: ${serpQuery.query}: `,
-              e,
-            );
+            log(`Timeout error running query: "${serpQuery.query}": `, e);
           } else {
-            log(`Error running query: ${serpQuery.query}: `, e);
+            log(`Error running query: "${serpQuery.query}": `, e);
           }
           return {
             learnings: [],

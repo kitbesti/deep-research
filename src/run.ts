@@ -31,10 +31,15 @@ async function run() {
   // Get initial query
   const initialQuery = await askQuestion('What would you like to research? ');
 
-  // Get language preference
+  // Get language preferences
+  const researchLanguage =
+    (await askQuestion(
+      'What language should the research be conducted in? (default: English) ',
+    )) || 'English';
+
   const outputLanguage =
     (await askQuestion(
-      'What language should the report be in? (default: English) ',
+      'What language should the final report be in? (default: English) ',
     )) || 'English';
 
   // Get breath and depth parameters
@@ -56,6 +61,7 @@ async function run() {
   // Generate follow-up questions
   const followUpQuestions = await generateFeedback({
     query: initialQuery,
+    researchLanguage,
   });
 
   log(
@@ -84,7 +90,8 @@ ${followUpQuestions.map((q: string, i: number) => `Q: ${q}\nA: ${answers[i]}`).j
     query: combinedQuery,
     breadth,
     depth,
-    onProgress: (progress) => {
+    researchLanguage,
+    onProgress: progress => {
       output.updateProgress(progress);
     },
   });
