@@ -100,7 +100,7 @@ async function processSerpResult({
   const contents = compact(result.data.map(item => item.markdown)).map(
     content => trimPrompt(content, 25_000),
   );
-  log(`Ran ${query}, found ${contents.length} contents`);
+  log(`Ran "${query}", found ${contents.length} contents`);
 
   const res = await generateObject({
     model: o3MiniModel,
@@ -132,10 +132,12 @@ export async function writeFinalReport({
   prompt,
   learnings,
   visitedUrls,
+  language = 'English',
 }: {
   prompt: string;
   learnings: string[];
   visitedUrls: string[];
+  language: string;
 }) {
   const learningsString = trimPrompt(
     learnings
@@ -147,11 +149,13 @@ export async function writeFinalReport({
   const res = await generateObject({
     model: o3MiniModel,
     system: systemPrompt(),
-    prompt: `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as as detailed as possible, aim for 3 or more pages, include ALL the learnings from research:\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from previous research:\n\n<learnings>\n${learningsString}\n</learnings>`,
+    prompt: `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as detailed as possible, aim for 3 or more pages, include ALL the learnings from research. The report should be written in ${language}:\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from previous research:\n\n<learnings>\n${learningsString}\n</learnings>`,
     schema: z.object({
       reportMarkdown: z
         .string()
-        .describe('Final report on the topic in Markdown'),
+        .describe(
+          `Final report on the topic in Markdown, written in ${language}`,
+        ),
     }),
   });
 

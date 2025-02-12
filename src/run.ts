@@ -31,6 +31,12 @@ async function run() {
   // Get initial query
   const initialQuery = await askQuestion('What would you like to research? ');
 
+  // Get language preference
+  const outputLanguage =
+    (await askQuestion(
+      'What language should the report be in? (default: English) ',
+    )) || 'English';
+
   // Get breath and depth parameters
   const breadth =
     parseInt(
@@ -93,6 +99,7 @@ ${followUpQuestions.map((q: string, i: number) => `Q: ${q}\nA: ${answers[i]}`).j
     prompt: combinedQuery,
     learnings,
     visitedUrls,
+    language: outputLanguage,
   });
 
   // Save report to file
