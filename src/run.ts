@@ -1,9 +1,18 @@
+// Load environment variables first
+import './env';
+
 import * as fs from 'fs/promises';
 import * as readline from 'readline';
+import { LanguageModel } from 'ai';
 
 import { deepResearch, writeFinalReport } from './deep-research';
 import { generateFeedback } from './feedback';
 import { OutputManager } from './output-manager';
+import { getSelectedModel } from './ai/providers';
+
+declare global {
+  var selectedModel: LanguageModel;
+}
 
 const output = new OutputManager();
 
@@ -28,6 +37,17 @@ function askQuestion(query: string): Promise<string> {
 
 // run the agent
 async function run() {
+  // Get model selection
+  const modelType = await askQuestion('Which model would you like to use? (openai/google): ');
+  if (modelType !== 'openai' && modelType !== 'google') {
+    console.error('Invalid model type. Please choose either "openai" or "google".');
+    rl.close();
+    return;
+  }
+
+  // Set the selected model in global scope
+  global.selectedModel = getSelectedModel(modelType);
+
   // Get initial query
   const initialQuery = await askQuestion('What would you like to research? ');
 

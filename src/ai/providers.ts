@@ -1,4 +1,5 @@
 import { createOpenAI, type OpenAIProviderSettings } from '@ai-sdk/openai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { getEncoding } from 'js-tiktoken';
 
 import { RecursiveCharacterTextSplitter } from './text-splitter';
@@ -13,14 +14,27 @@ const openai = createOpenAI({
   baseURL: process.env.OPENAI_ENDPOINT || 'https://api.openai.com/v1',
 } as CustomOpenAIProviderSettings);
 
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GOOGLE_KEY!,
+});
+
 const customModel = process.env.OPENAI_MODEL || 'o3-mini';
+const customGoogleModel = process.env.GOOGLE_MODEL || 'gemini-2.0-pro-exp-02-05';
 
 // Models
-
 export const o3MiniModel = openai(customModel, {
   reasoningEffort: customModel.startsWith('o') ? 'medium' : undefined,
   structuredOutputs: true,
 });
+
+export const googleModel = google(customGoogleModel, {
+  structuredOutputs: true,
+});
+
+// Export a function to get the selected model
+export function getSelectedModel(modelType: 'openai' | 'google') {
+  return modelType === 'openai' ? o3MiniModel : googleModel;
+}
 
 const MinChunkSize = 140;
 const encoder = getEncoding('o200k_base');
