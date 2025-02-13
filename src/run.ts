@@ -57,15 +57,17 @@ function askQuestion(query: string): Promise<string> {
 // run the agent
 async function run() {
   // Get model selection
-  const modelType = await askQuestion('Which model would you like to use? (openai/google): ');
-  if (modelType !== 'openai' && modelType !== 'google') {
-    console.error('Invalid model type. Please choose either "openai" or "google".');
+  const modelType = await askQuestion('Which model would you like to use? (openai/google/azure/mistral) [default: openai]: ');
+  const selectedModelType = modelType || 'openai';
+  
+  if (!['openai', 'google', 'azure', 'mistral'].includes(selectedModelType)) {
+    console.error('Invalid model type. Please choose one of: openai, google, azure, mistral');
     rl.close();
     return;
   }
 
   // Set the selected model in global scope
-  global.selectedModel = getSelectedModel(modelType);
+  global.selectedModel = getSelectedModel(selectedModelType as 'openai' | 'google' | 'azure' | 'mistral');
 
   // Get initial query
   const initialQuery = await askQuestion('What would you like to research? ');

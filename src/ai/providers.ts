@@ -1,12 +1,17 @@
-import { createOpenAI, type OpenAIProviderSettings } from '@ai-sdk/openai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createAzure } from '@ai-sdk/azure';
+import { createMistral } from '@ai-sdk/mistral';
 import { getEncoding } from 'js-tiktoken';
 
 import { RecursiveCharacterTextSplitter } from './text-splitter';
 
-interface CustomOpenAIProviderSettings extends OpenAIProviderSettings {
+interface CustomOpenAIProviderSettings {
   baseURL?: string;
 }
+
+// Add delay utility
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Providers
 const openai = createOpenAI({
@@ -18,8 +23,20 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_KEY!,
 });
 
+const azure = createAzure({
+  apiKey: process.env.AZURE_KEY!,
+  resourceName: process.env.AZURE_RESOURCE_NAME,
+});
+
+const mistral = createMistral({
+  apiKey: process.env.MISTRAL_KEY!,
+});
+
+// Default models for each provider
 const customModel = process.env.OPENAI_MODEL || 'o3-mini';
 const customGoogleModel = process.env.GOOGLE_MODEL || 'gemini-2.0-pro-exp-02-05';
+const customAzureModel = process.env.AZURE_MODEL || 'gpt-4o-mini';
+const customMistralModel = process.env.MISTRAL_MODEL || 'mistral-large-latest';
 
 // Models
 export const o3MiniModel = openai(customModel, {
@@ -31,9 +48,26 @@ export const googleModel = google(customGoogleModel, {
   structuredOutputs: true,
 });
 
+export const azureModel = azure(customAzureModel, {
+  structuredOutputs: true,
+});
+
+export const mistralModel = mistral(customMistralModel);
+
 // Export a function to get the selected model
-export function getSelectedModel(modelType: 'openai' | 'google') {
-  return modelType === 'openai' ? o3MiniModel : googleModel;
+export function getSelectedModel(modelType: 'openai' | 'google' | 'azure' | 'mistral') {
+  switch (modelType) {
+    case 'openai':
+      return o3MiniModel;
+    case 'google':
+      return googleModel;
+    case 'azure':
+      return azureModel;
+    case 'mistral':
+      return mistralModel;
+    default:
+      return o3MiniModel;
+  }
 }
 
 const MinChunkSize = 140;
