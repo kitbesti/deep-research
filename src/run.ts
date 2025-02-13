@@ -54,20 +54,45 @@ function askQuestion(query: string): Promise<string> {
   });
 }
 
+type ModelType = 'openai' | 'google' | 'azure' | 'mistral';
+
+// Get available models
+const getAvailableModels = () => {
+  const models: { [key in ModelType]: boolean } = {
+    openai: Boolean(process.env.OPENAI_KEY),
+    google: Boolean(process.env.GOOGLE_KEY),
+    azure: Boolean(process.env.AZURE_KEY && process.env.AZURE_RESOURCE_NAME),
+    mistral: Boolean(process.env.MISTRAL_KEY),
+  };
+
+  return Object.entries(models)
+    .filter(([_, available]) => available)
+    .map(([name]) => name as ModelType);
+};
+
 // run the agent
 async function run() {
-  // Get model selection
-  const modelType = await askQuestion('Which model would you like to use? (openai/google/azure/mistral) [default: openai]: ');
-  const selectedModelType = modelType || 'openai';
+  const availableModels = getAvailableModels();
   
-  if (!['openai', 'google', 'azure', 'mistral'].includes(selectedModelType)) {
-    console.error('Invalid model type. Please choose one of: openai, google, azure, mistral');
+  if (availableModels.length === 0) {
+    console.error('No AI providers configured. Please add at least one provider\'s API key to .env.local');
+    process.exit(1);
+  }
+
+  // Get model selection
+  const modelOptions = availableModels.join('/');
+  const defaultModel = availableModels[0];
+  const modelType = await askQuestion(`Which model would you like to use? (${modelOptions}) [default: ${defaultModel}]: `);
+  const selectedModelType = (modelType || defaultModel) as ModelType;
+  
+  if (!availableModels.includes(selectedModelType)) {
+    console.error(`Invalid model type. Please choose one of: ${modelOptions}`);
     rl.close();
     return;
   }
 
   // Set the selected model in global scope
-  global.selectedModel = getSelectedModel(selectedModelType as 'openai' | 'google' | 'azure' | 'mistral');
+  global.selectedModel = getSelectedModel(selectedModelType);
 
   // Get initial query
   const initialQuery = await askQuestion('What would you like to research? ');

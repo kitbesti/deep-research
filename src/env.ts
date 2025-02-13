@@ -12,14 +12,7 @@ if (result.error) {
 }
 
 // Validate required environment variables
-const requiredEnvVars = [
-  'FIRECRAWL_KEY',
-  'OPENAI_KEY',
-  'GOOGLE_KEY',
-  'AZURE_API_KEY',
-  'AZURE_RESOURCE_NAME',
-  'MISTRAL_API_KEY'
-];
+const requiredEnvVars = ['FIRECRAWL_KEY'];
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
 if (missingEnvVars.length > 0) {
@@ -27,9 +20,19 @@ if (missingEnvVars.length > 0) {
   process.exit(1);
 }
 
-// Log the first few characters of each key for verification
-console.log('Environment variables loaded:');
-requiredEnvVars.forEach(key => {
-  const value = process.env[key];
-  console.log(`- ${key}: ${value ? value.substring(0, 8) + '...' : 'not set'}`);
+// Log available AI providers
+const availableProviders = [
+  { name: 'OpenAI', key: 'OPENAI_KEY' },
+  { name: 'Google AI', key: 'GOOGLE_KEY' },
+  { name: 'Azure OpenAI', key: ['AZURE_KEY', 'AZURE_RESOURCE_NAME'] },
+  { name: 'Mistral AI', key: 'MISTRAL_KEY' }
+].filter(provider => 
+  Array.isArray(provider.key) 
+    ? provider.key.every(k => process.env[k])
+    : process.env[provider.key]
+);
+
+console.log('\nAvailable AI providers:');
+availableProviders.forEach(provider => {
+  console.log(`- ${provider.name}`);
 }); 
