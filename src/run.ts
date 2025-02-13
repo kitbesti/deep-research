@@ -2,6 +2,7 @@
 import './env';
 
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import * as readline from 'readline';
 import { LanguageModel } from 'ai';
 
@@ -19,6 +20,24 @@ const output = new OutputManager();
 // Helper function for consistent logging
 function log(...args: any[]) {
   output.log(...args);
+}
+
+// Helper function to sanitize filename
+function sanitizeFilename(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric chars with hyphen
+    .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
+    .substring(0, 100); // Limit length
+}
+
+// Helper function to ensure directory exists
+async function ensureDir(dir: string) {
+  try {
+    await fs.access(dir);
+  } catch {
+    await fs.mkdir(dir, { recursive: true });
+  }
 }
 
 const rl = readline.createInterface({
@@ -115,11 +134,22 @@ ${followUpQuestions.map((q: string, i: number) => `Q: ${q}\nA: ${answers[i]}`).j
     visitedUrls,
   });
 
+  // Create reports directory if it doesn't exist
+  const reportsDir = 'deep-research-reports';  // Fixed directory for all research reports
+  await ensureDir(reportsDir);
+  log(`\nCreating research report in directory: ${reportsDir}`);
+
+  // Generate filename from initial query and timestamp
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const sanitizedQuery = sanitizeFilename(initialQuery);
+  const filename = `${sanitizedQuery}-${timestamp}.md`;
+  const filepath = path.join(reportsDir, filename);
+
   // Save report to file
-  await fs.writeFile('output.md', report, 'utf-8');
+  await fs.writeFile(filepath, report, 'utf-8');
 
   console.log(`\n\nFinal Report:\n\n${report}`);
-  console.log('\nReport has been saved to output.md');
+  console.log(`\nReport has been saved to ${filepath}`);
   rl.close();
 }
 
