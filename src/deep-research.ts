@@ -105,18 +105,16 @@ async function processSerpResult({
   // Save each document
   for (const doc of result.data) {
     if (doc.markdown && doc.url) {
-      const timestamp = new Date().toISOString();
-      
       const content = [
         doc.title ? `Title: ${doc.title}` : '',
         doc.description ? `Description: ${doc.description}` : '',
         `URL: ${doc.url}`,
-        `Accessed at: ${timestamp}`,
+        `Accessed at: ${Date()}`,
         '',
         doc.markdown
       ].filter(Boolean).join('\n');
 
-      const filename = sanitize(`${doc.url}-${timestamp}`, { replacement: "-" })
+      const filename = sanitize(`${doc.url}`, { replacement: "-" })
       await fs.writeFile(`downloaded-urls/${filename}.md`, content, 'utf-8');
     }
   }
