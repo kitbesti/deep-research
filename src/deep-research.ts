@@ -3,6 +3,8 @@ import { generateObject } from 'ai';
 import { compact } from 'lodash-es';
 import pLimit from 'p-limit';
 import { z } from 'zod';
+import * as fs from 'fs/promises';
+import sanitize from 'sanitize-filename';
 
 import { o3MiniModel, trimPrompt } from './ai/providers';
 import { systemPrompt } from './prompt';
@@ -97,6 +99,28 @@ async function processSerpResult({
   numLearnings?: number;
   numFollowUpQuestions?: number;
 }) {
+  // Create downloaded-urls directory if it doesn't exist
+  await fs.mkdir('downloaded-urls', { recursive: true });
+
+  // Save each document
+  for (const doc of result.data) {
+    if (doc.markdown && doc.url) {
+      const timestamp = new Date().toISOString();
+      
+      const content = [
+        doc.title ? `Title: ${doc.title}` : '',
+        doc.description ? `Description: ${doc.description}` : '',
+        `URL: ${doc.url}`,
+        `Accessed at: ${timestamp}`,
+        '',
+        doc.markdown
+      ].filter(Boolean).join('\n');
+
+      const filename = sanitize(`${doc.url}-${timestamp}`, { replacement: "-" })
+      await fs.writeFile(`downloaded-urls/${filename}.md`, content, 'utf-8');
+    }
+  }
+
   const contents = compact(result.data.map(item => item.markdown)).map(
     content => trimPrompt(content, 25_000),
   );
