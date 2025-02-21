@@ -4,7 +4,6 @@ import { compact } from 'lodash-es';
 import pLimit from 'p-limit';
 import { z } from 'zod';
 import * as fs from 'fs/promises';
-import sanitize from 'sanitize-filename';
 
 import { o3MiniModel, trimPrompt } from './ai/providers';
 import { systemPrompt } from './prompt';
@@ -88,8 +87,10 @@ async function generateSerpQueries({
   return res.object.queries.slice(0, numQueries);
 }
 
+import sanitize from 'sanitize-filename';
+import path from 'path';
 export function urlToFilepath(url: string): string {
-  return `downloaded-urls/${sanitize(url, { replacement: '-' })}.md`;
+  return path.join('downloaded-urls', `${sanitize(url, { replacement: '-' })}.md`);
 }
 
 async function processSerpResult({
@@ -181,7 +182,7 @@ export async function writeFinalReport({
   });
 
   // Append the visited URLs section to the report
-  const urlsSection = `\n\n## Sources\n\n${visitedUrls.map(url => `- ${url}`).join('\n')}`;
+  const urlsSection = `\n\n## Sources\n\n${visitedUrls.map(url => `- ${url}, saved at ${urlToFilepath(url)}`).join('\n')}`;
   return res.object.reportMarkdown + urlsSection;
 }
 
