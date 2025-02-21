@@ -88,6 +88,9 @@ async function generateSerpQueries({
   return res.object.queries.slice(0, numQueries);
 }
 
+export function urlToFilepath(url: string): string {
+  return `downloaded-urls/${sanitize(url, { replacement: '-' })}.md`;
+
 async function processSerpResult({
   query,
   result,
@@ -114,8 +117,7 @@ async function processSerpResult({
         doc.markdown
       ].filter(Boolean).join('\n');
 
-      const filename = sanitize(`${doc.url}`, { replacement: "-" })
-      await fs.writeFile(`downloaded-urls/${filename}.md`, content, 'utf-8');
+      await fs.writeFile(urlToFilepath(doc.url), content, 'utf-8');
     }
   }
 
