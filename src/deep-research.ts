@@ -90,6 +90,7 @@ async function generateSerpQueries({
 
 export function urlToFilepath(url: string): string {
   return `downloaded-urls/${sanitize(url, { replacement: '-' })}.md`;
+}
 
 async function processSerpResult({
   query,
