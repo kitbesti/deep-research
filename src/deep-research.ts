@@ -1,5 +1,5 @@
 import FirecrawlApp, { SearchResponse } from '@mendable/firecrawl-js';
-import { generateObject } from 'ai';
+import { generateObject, generateText, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, type ToolCallRepairFunction, type ToolSet } from 'ai';
 import { compact } from 'lodash-es';
 import pLimit from 'p-limit';
 import { z } from 'zod';
@@ -41,6 +41,49 @@ const firecrawl = new FirecrawlApp({
   apiUrl: process.env.FIRECRAWL_BASE_URL,
 });
 
+/**
+ * Common tool call repair function that can be used across different generateObject calls
+ */
+const repairToolCall: ToolCallRepairFunction<ToolSet> = async ({
+  toolCall,
+  tools,
+  parameterSchema,
+  error,
+  messages,
+  system,
+}) => {
+  if (NoSuchToolError.isInstance(error)) {
+    return null; // don't attempt to fix invalid tool names
+  }
+
+  try {
+    // Try to repair the tool call using the same model
+    const result = await generateText({
+      model: o3MiniModel,
+      system,
+      messages,
+      tools,
+      output: 'no-schema',
+    });
+
+    const newToolCall = result.toolCalls.find(
+      newToolCall => newToolCall.toolName === toolCall.toolName,
+    );
+
+    return newToolCall != null
+      ? {
+          toolCallType: 'function' as const,
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.toolName,
+          args: JSON.stringify(newToolCall.args),
+        }
+      : null;
+  } catch (repairError) {
+    log('Error during tool call repair:', repairError);
+    return null;
+  }
+}
+
 // take en user query, return a list of SERP queries
 async function generateSerpQueries({
   query,
@@ -50,47 +93,73 @@ async function generateSerpQueries({
 }: {
   query: string;
   numQueries?: number;
-
-  // optional, if provided, the research will continue from the last learning
   learnings?: string[];
   researchLanguage: string;
 }) {
-  const res = await generateObject({
-    model: o3MiniModel,
-    system: systemPrompt(),
-    prompt: `
-      Given the following prompt from the user, generate a list of SERP queries to research the topic.
-      The queries should be in ${researchLanguage}.
-      Return a maximum of ${numQueries} queries, but feel free to return less if the original prompt is clear.
-      Make sure each query is unique and not similar to each other:
 
-      <prompt>${query}</prompt>
-
-      ${
+  try {
+    const result = await generateText({
+      model: o3MiniModel,
+      system: systemPrompt(),
+      prompt: `Given the following prompt from the user, generate a list of SERP queries to research the topic.
+      The queries should be in ${researchLanguage}. Return a maximum of ${numQueries} queries in a structured format. 
+      Each query should be on a new line starting with a number and include both the query and its research goal. 
+      Make sure each query is unique and not similar to each other: 
+      
+      <prompt>${query}</prompt>\n\n${
         learnings
-          ? `Here are some learnings from previous research, use them to generate more specific queries:
-           ${learnings.join('\n')}`
+          ? `Here are some learnings from previous research, use them to generate more specific queries: ${learnings.join(
+              '\n',
+            )}`
           : ''
-      }
-    `,
-    schema: z.object({
-      queries: z
-        .array(
-          z.object({
-            query: z.string().describe('The SERP query'),
-            researchGoal: z
-              .string()
-              .describe(
-                'First talk about the goal of the research that this query is meant to accomplish, then go deeper into how to advance the research once the results are found, mention additional research directions. Be as specific as possible, especially for additional research directions.',
-              ),
-          }),
-        )
-        .describe(`List of SERP queries, max of ${numQueries}`),
-    }),
-  });
-  log(`Created ${res.object.queries.length} queries`, res.object.queries);
+      }`,
+      experimental_repairToolCall: repairToolCall,
+    });
 
-  return res.object.queries.slice(0, numQueries);
+    // Parse the text output into structured queries
+    const lines = result.text.split('\n').filter(line => line.trim());
+    const queries = [];
+    let currentQuery = null;
+
+    for (const line of lines) {
+      // Match lines that start with a number followed by a dot or parenthesis
+      const queryMatch = line.match(/^\d+[\.\)]?\s*\*?\*?"?([^"]+)"?\*?\*?/);
+      if (queryMatch) {
+        if (currentQuery) {
+          queries.push(currentQuery);
+        }
+        currentQuery = {
+          query: queryMatch[1].trim(),
+          researchGoal: '',
+        };
+      } else if (currentQuery && line.toLowerCase().includes('focus:')) {
+        // Extract research goal after "Focus:"
+        currentQuery.researchGoal = line.split('Focus:')[1].trim().replace(/^\*|\*$/g, '');
+        queries.push(currentQuery);
+        currentQuery = null;
+      } else if (currentQuery && !line.startsWith('*') && !line.startsWith('-')) {
+        // If no explicit "Focus:" but there's additional text, use it as the research goal
+        currentQuery.researchGoal = line.trim().replace(/^\*|\*$/g, '');
+        queries.push(currentQuery);
+        currentQuery = null;
+      }
+    }
+
+    // Add the last query if it exists
+    if (currentQuery) {
+      queries.push(currentQuery);
+    }
+    
+    log(
+      `Created ${queries.length} queries`,
+      queries,
+    );
+
+    return queries.slice(0, numQueries);
+  } catch (error) {
+    log('Error generating SERP queries:', error);
+    return [];
+  }
 }
 
 async function processSerpResult({
@@ -106,40 +175,50 @@ async function processSerpResult({
   numFollowUpQuestions?: number;
   researchLanguage: string;
 }) {
-  const contents = compact(result.data.map(item => item.markdown)).map(
-    content => trimPrompt(content, 25_000),
-  );
-  log(`Ran "${query}", found ${contents.length} contents`);
 
-  const res = await generateObject({
-    model: o3MiniModel,
-    abortSignal: AbortSignal.timeout(60_000),
-    system: systemPrompt(),
-    prompt: `
-      Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents.
+  try {
+    const contents = compact(result.data.map(item => item.markdown)).map(
+      content => trimPrompt(content, 25_000),
+    );
+    log(`Ran ${query}, found ${contents.length} contents`);
+
+    const res = await generateObject({
+      model: o3MiniModel,
+      abortSignal: AbortSignal.timeout(60_000),
+      system: systemPrompt(),
+      prompt: `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. 
       The learnings and follow-up questions should be in ${researchLanguage}.
-      Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear.
-      Make sure each learning is unique and not similar to each other.
-      The learnings should be concise and to the point, as detailed and information dense as possible.
-      Make sure to include any entities like people, places, companies, products, things, etc in the learnings,
-      as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.
+      Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. 
+      Make sure each learning is unique and not similar to each other. 
+      The learnings should be concise and to the point, as detailed and information dense as possible. 
+      Make sure to include any entities like people, places, companies, products, things, etc in the learnings, 
+      as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.\n\n<contents>${contents
+        .map(content => `<content>\n${content}\n</content>`)
+        .join('\n')}</contents>`,
+      schema: z.object({
+        learnings: z
+          .array(z.string())
+          .describe(`List of learnings, max of ${numLearnings}`),
+        followUpQuestions: z
+          .array(z.string())
+          .describe(
+            `List of follow-up questions to research the topic further, max of ${numFollowUpQuestions}`,
+          ),
+      }),
+      experimental_repairToolCall: repairToolCall,
+    });
 
-      <contents>${contents.map(content => `<content>\n${content}\n</content>`).join('\n')}</contents>
-    `,
-    schema: z.object({
-      learnings: z
-        .array(z.string())
-        .describe(`List of learnings, max of ${numLearnings}`),
-      followUpQuestions: z
-        .array(z.string())
-        .describe(
-          `List of follow-up questions to research the topic further, max of ${numFollowUpQuestions}`,
-        ),
-    }),
-  });
-  log(`Created ${res.object.learnings.length} learnings`, res.object.learnings);
+    log(
+      `Created ${res.object.learnings.length} learnings`,
+      res.object.learnings,
+    );
 
-  return res.object;
+
+    return res.object;
+  } catch (error) {
+    log('Error processing SERP result:', error);
+    return { learnings: [], followUpQuestions: [] };
+  }
 }
 
 export async function writeFinalReport({
@@ -153,29 +232,42 @@ export async function writeFinalReport({
   visitedUrls: string[];
   language: string;
 }) {
-  const learningsString = trimPrompt(
-    learnings
-      .map(learning => `<learning>\n${learning}\n</learning>`)
-      .join('\n'),
-    150_000,
-  );
+  try {
+    const learningsString = trimPrompt(
+      learnings
+        .map(learning => `<learning>\n${learning}\n</learning>`)
+        .join('\n'),
+      150_000,
+    );
 
-  const res = await generateObject({
-    model: o3MiniModel,
-    system: systemPrompt(),
-    prompt: `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as detailed as possible, aim for 3 or more pages, include ALL the learnings from research. The report should be written in ${language}:\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from previous research:\n\n<learnings>\n${learningsString}\n</learnings>`,
-    schema: z.object({
+
+    // Use generateText instead of generateObject since we want markdown output
+    const result = await generateText({
+      model: o3MiniModel,
+      system: systemPrompt(),
+      prompt: `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as as detailed as possible, aim for 3 or more pages, include ALL the learnings from research. The report should be written in ${language}, and return the report in markdown format:\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from previous research:\n\n<learnings>\n${learningsString}\n</learnings>`,
+      schema: z.object({
       reportMarkdown: z
         .string()
         .describe(
           `Final report on the topic in Markdown, written in ${language}`,
         ),
     }),
-  });
+      experimental_repairToolCall: repairToolCall,
+    });
 
-  // Append the visited URLs section to the report
-  const urlsSection = `\n\n## Sources\n\n${visitedUrls.map(url => `- ${url}`).join('\n')}`;
-  return res.object.reportMarkdown + urlsSection;
+    // The result.text will contain the markdown directly
+    const report = result.text;
+
+
+    // Append the visited URLs section to the report
+    const urlsSection = `\n\n## Sources\n\n${visitedUrls.map(url => `- ${url}`).join('\n')}`;
+    return report + urlsSection;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    log('Error writing final report:', error);
+    return `Error generating report: ${errorMessage}\n\n## Sources\n\n${visitedUrls.map(url => `- ${url}`).join('\n')}`;
+  }
 }
 
 export async function deepResearch({
