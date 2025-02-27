@@ -196,14 +196,14 @@ async function processSerpResult({
         .map(content => `<content>\n${content}\n</content>`)
         .join('\n')}</contents>`,
       schema: z.object({
-        learnings: z
-          .array(z.string())
-          .describe(`List of learnings, max of ${numLearnings}`),
         followUpQuestions: z
           .array(z.string())
           .describe(
             `List of follow-up questions to research the topic further, max of ${numFollowUpQuestions}`,
           ),
+        learnings: z
+          .array(z.string())
+          .describe(`List of learnings, max of ${numLearnings}`),
       }),
       experimental_repairToolCall: repairToolCall,
     });
