@@ -58,20 +58,21 @@ async function run() {
 
   log(`Creating research plan...`);
 
-  // Generate follow-up questions
-  const followUpQuestions = await generateFeedback({
+  log('\nTo better understand your research needs, please answer these follow-up questions:');
+
+  // Collect answers to follow-up questions
+  const followUpQuestions: string[] = [];
+  const answers: string[] = [];
+
+  // Generate question and get answer one by one
+  const question = await generateFeedback({
     query: initialQuery,
     researchLanguage,
   });
-
-  log(
-    '\nTo better understand your research needs, please answer these follow-up questions:',
-  );
-
-  // Collect answers to follow-up questions
-  const answers: string[] = [];
-  for (const question of followUpQuestions) {
-    const answer = await askQuestion(`\n${question}\nYour answer: `);
+  
+  for (const q of question) {
+    const answer = await askQuestion(`\n${q}\nYour answer: `);
+    followUpQuestions.push(q);
     answers.push(answer);
   }
 
