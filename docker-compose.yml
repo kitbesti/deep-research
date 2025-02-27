@@ -4,7 +4,5 @@ services:
     build: .
     env_file:
       - .env.local
-    volumes:
-      -  ./:/app/
     tty: true
     stdin_open: true
