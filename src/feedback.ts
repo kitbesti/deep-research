@@ -13,15 +13,19 @@ import { systemPrompt } from './prompt';
 export async function generateFeedback({
   query,
   numQuestions = 3,
+  researchLanguage,
 }: {
   query: string;
   numQuestions?: number;
+
 }): Promise<string[]> {
   try {
     const result = await generateText({
       model: o3MiniModel,
       system: systemPrompt(),
-      prompt: `Given the following query from the user, ask some follow up questions to clarify the research direction. Return a maximum of ${numQuestions} questions, but feel free to return less if the original query is clear: <query>${query}</query>`,
+      prompt: `Given the following query from the user, ask some follow up questions to clarify the research direction. 
+      The questions should be in ${researchLanguage}.
+      Return a maximum of ${numQuestions} questions, but feel free to return less if the original query is clear: <query>${query}</query>`,
       experimental_repairToolCall: async ({
         toolCall,
         tools,
@@ -33,6 +37,7 @@ export async function generateFeedback({
         if (NoSuchToolError.isInstance(error)) {
           return null; // don't attempt to fix invalid tool names
         }
+
 
         // Try to repair the tool call using a stronger model
         const result = await generateText({
