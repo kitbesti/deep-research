@@ -4,6 +4,7 @@ import { generateObject } from 'ai';
 import { compact } from 'lodash-es';
 import pLimit from 'p-limit';
 import { z } from 'zod';
+import * as fs from 'fs/promises';
 
 import { trimPrompt } from './ai/providers';
 import { systemPrompt } from './prompt';
@@ -99,6 +100,12 @@ async function generateSerpQueries({
   return res.object.queries.slice(0, numQueries);
 }
 
+import sanitize from 'sanitize-filename';
+import path from 'path';
+export function urlToFilepath(url: string): string {
+  return path.join('downloaded-urls', `${sanitize(url, { replacement: '-' })}.md`);
+}
+
 async function processSerpResult({
   query,
   result,
@@ -112,6 +119,25 @@ async function processSerpResult({
   numFollowUpQuestions?: number;
   researchLanguage: string;
 }) {
+  // Create downloaded-urls directory if it doesn't exist
+  await fs.mkdir('downloaded-urls', { recursive: true });
+
+  // Save each document
+  for (const doc of result.data) {
+    if (doc.markdown && doc.url) {
+      const content = [
+        doc.title ? `Title: ${doc.title}` : '',
+        doc.description ? `Description: ${doc.description}` : '',
+        `URL: ${doc.url}`,
+        `Accessed at: ${Date()}`,
+        '',
+        doc.markdown
+      ].filter(Boolean).join('\n');
+
+      await fs.writeFile(urlToFilepath(doc.url), content, 'utf-8');
+    }
+  }
+
   const contents = compact(result.data.map(item => item.markdown)).map(
     content => trimPrompt(content, 25_000),
   );
@@ -180,7 +206,7 @@ export async function writeFinalReport({
   });
 
   // Append the visited URLs section to the report
-  const urlsSection = `\n\n## Sources\n\n${visitedUrls.map(url => `- ${url}`).join('\n')}`;
+  const urlsSection = `\n\n## Sources\n\n${visitedUrls.map(url => `- ${url}, saved at ${urlToFilepath(url)}`).join('\n')}`;
   return res.object.reportMarkdown + urlsSection;
 }
 

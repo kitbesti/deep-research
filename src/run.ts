@@ -108,6 +108,8 @@ async function run() {
       'What language should the final report be in? (default: English) ',
     )) || 'English';
 
+  const outputFile = 'output.md';
+  
   // Get breath and depth parameters
   const breadth =
     parseInt(
@@ -122,7 +124,10 @@ async function run() {
       10,
     ) || 2;
 
-  log(`Creating research plan...`);
+  const inittext = `Research starting at ${new Date().toISOString()} with breadth ${breadth} and depth ${depth}.`;
+
+  await fs.writeFile(outputFile, inittext, 'utf-8');
+  log(`${inittext}\nCreating research plan...`);
 
   // Generate follow-up questions
   const followUpQuestions = await generateFeedback({
@@ -147,6 +152,7 @@ Initial Query: ${initialQuery}
 Follow-up Questions and Answers:
 ${followUpQuestions.map((q: string, i: number) => `Q: ${q}\nA: ${answers[i]}`).join('\n')}
 `;
+  await fs.appendFile(outputFile, combinedQuery, 'utf-8');
 
   log('\nResearching your topic...');
 
@@ -162,18 +168,18 @@ ${followUpQuestions.map((q: string, i: number) => `Q: ${q}\nA: ${answers[i]}`).j
     },
   });
 
-  log(`\n\nLearnings:\n\n${learnings.join('\n')}`);
-  log(
-    `\n\nVisited URLs (${visitedUrls.length}):\n\n${visitedUrls.join('\n')}`,
-  );
+  const URLsandLearnings = `\n\nLearnings:\n\n${learnings.join('\n')}\n\nVisited URLs (${visitedUrls.length}):\n\n${visitedUrls.join('\n')}\n`;
+  await fs.appendFile(outputFile, URLsandLearnings, 'utf-8');
+
+  log(URLsandLearnings);
   log('Writing final report...');
 
-  const report = await writeFinalReport({
+  const report = `\n\nFinal Report:\n\n${await writeFinalReport({
     prompt: combinedQuery,
     learnings,
     visitedUrls,
     language: outputLanguage,
-  });
+  })}`;
 
   // Create reports directory if it doesn't exist
   const reportsDir = 'deep-research-reports';  // Fixed directory for all research reports
