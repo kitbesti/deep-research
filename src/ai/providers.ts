@@ -59,7 +59,7 @@ const customGoogleModel =
   process.env.GOOGLE_MODEL || 'gemini-2.0-pro-exp-02-05';
 const customAzureModel = process.env.AZURE_MODEL || 'gpt-4o-mini';
 const customMistralModel = process.env.MISTRAL_MODEL || 'mistral-large-latest';
-const customDeepseekModel = process.env.DEEPSEEK_MODEL || 'deepseek-r1-chat';
+const customDeepseekModel = process.env.DEEPSEEK_MODEL || 'deepseek-reasoner';
 
 // Models - only initialize if provider is configured
 export const o3MiniModel = openai
@@ -83,7 +83,11 @@ export const azureModel = azure
 
 export const mistralModel = mistral ? mistral(customMistralModel) : null;
 
-export const deepseekModel = deepseek ? deepseek(customDeepseekModel) : null;
+export const deepseekModel = deepseek
+  ? deepseek(customDeepseekModel, {
+      // Deepseek doesn't support JSON output, so we don't set structuredOutputs here
+    })
+  : null;
 
 // Export a function to get the selected model
 export function getSelectedModel(
