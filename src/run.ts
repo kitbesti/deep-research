@@ -58,7 +58,7 @@ async function run() {
 
   log(`Creating research plan...`);
 
-  log('\nTo better understand your research needs, please answer these follow-up questions:');
+  log('To better understand your research needs, please answer these follow-up questions:');
 
   // Collect answers to follow-up questions
   const followUpQuestions: string[] = [];

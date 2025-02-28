@@ -184,16 +184,24 @@ async function processSerpResult({
 
     const res = await generateObject({
       model: o3MiniModel,
-      abortSignal: AbortSignal.timeout(60_000),
+      abortSignal: AbortSignal.timeout(60_000_000),
       system: systemPrompt(),
       prompt: `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. 
+      IMPORTANT RULES:
+      1. ONLY use information that is explicitly stated in the provided contents.
+      2. DO NOT make assumptions or add information from your own knowledge.
+      3. Each learning MUST be directly supported by the search contents.
+      4. If you're unsure about any information, exclude it.
+      5. Use exact quotes and numbers from the contents when possible.
+      6. Cite the specific content section for each learning using [Content X] at the end of each learning.
+
       The learnings and follow-up questions should be in ${researchLanguage}.
       Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. 
       Make sure each learning is unique and not similar to each other. 
       The learnings should be concise and to the point, as detailed and information dense as possible. 
       Make sure to include any entities like people, places, companies, products, things, etc in the learnings, 
       as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.\n\n<contents>${contents
-        .map(content => `<content>\n${content}\n</content>`)
+        .map((content, idx) => `<content${idx + 1}>\n${content}\n</content${idx + 1}>`)
         .join('\n')}</contents>`,
       schema: z.object({
         followUpQuestions: z
@@ -203,18 +211,18 @@ async function processSerpResult({
           ),
         learnings: z
           .array(z.string())
-          .describe(`List of learnings, max of ${numLearnings}`),
+          .describe(`List of learnings, max of ${numLearnings}, each with a content citation`),
       }),
       experimental_repairToolCall: repairToolCall,
     });
 
-    log(
-      `Created ${res.object.learnings.length} learnings`,
-      res.object.learnings,
-    );
-
-
-    return res.object;
+    try {
+      return process.env.OPENAI_MODEL?.includes('deepseek') 
+        ? JSON.parse(res.choices[0].message.content)
+        : res.object;
+    } catch (e) {
+      return res.object;
+    }
   } catch (error) {
     log('Error processing SERP result:', error);
     return { learnings: [], followUpQuestions: [] };
@@ -240,29 +248,43 @@ export async function writeFinalReport({
       150_000,
     );
 
-
     // Use generateText instead of generateObject since we want markdown output
     const result = await generateText({
       model: o3MiniModel,
       system: systemPrompt(),
-      prompt: `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as as detailed as possible, aim for 3 or more pages, include ALL the learnings from research. The report should be written in ${language}, and return the report in markdown format:\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from previous research:\n\n<learnings>\n${learningsString}\n</learnings>`,
+      prompt: `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as as detailed as possible, aim for 3 or more pages, include ALL the learnings from research.
+
+      IMPORTANT RULES:
+      1. The report MUST be based ONLY on the provided learnings.
+      2. DO NOT add any new information that is not in the learnings.
+      3. DO NOT make assumptions or add information from your own knowledge.
+      4. Maintain all citations from the learnings in your report.
+      5. If you find any conflicts in the learnings, highlight them clearly.
+      
+      The report should be written in ${language}, and return the report in markdown format:\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from previous research:\n\n<learnings>\n${learningsString}\n</learnings>`,
       schema: z.object({
-      reportMarkdown: z
-        .string()
-        .describe(
-          `Final report on the topic in Markdown, written in ${language}`,
-        ),
-    }),
+        reportMarkdown: z
+          .string()
+          .describe(
+            `Final report on the topic in Markdown, written in ${language}, strictly based on provided learnings`,
+          ),
+      }),
       experimental_repairToolCall: repairToolCall,
     });
 
-    // The result.text will contain the markdown directly
-    const report = result.text;
+    try {
+      const report = process.env.OPENAI_MODEL?.includes('deepseek')
+        ? JSON.parse(result.choices[0].message.content).reportMarkdown
+        : result.text;
 
-
-    // Append the visited URLs section to the report
-    const urlsSection = `\n\n## Sources\n\n${visitedUrls.map(url => `- ${url}`).join('\n')}`;
-    return report + urlsSection;
+      // Append the visited URLs section to the report
+      const urlsSection = `\n\n## Sources\n\n${visitedUrls.map(url => `- ${url}`).join('\n')}`;
+      return report + urlsSection;
+    } catch (e) {
+      // 如果解析失败，回退到原有逻辑
+      const urlsSection = `\n\n## Sources\n\n${visitedUrls.map(url => `- ${url}`).join('\n')}`;
+      return result.text + urlsSection;
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     log('Error writing final report:', error);
