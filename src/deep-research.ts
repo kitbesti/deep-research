@@ -5,9 +5,9 @@ import { compact } from 'lodash-es';
 import pLimit from 'p-limit';
 import { z } from 'zod';
 
-import { o3MiniModel, trimPrompt } from './ai/providers';
-import { OutputManager } from './output-manager';
+import { trimPrompt } from './ai/providers';
 import { systemPrompt } from './prompt';
+import { OutputManager } from './output-manager';
 
 // Initialize output manager for coordinated console/progress output
 const output = new OutputManager();
@@ -36,9 +36,14 @@ type ResearchResult = {
 const ConcurrencyLimit = 2;
 
 // Initialize Firecrawl with optional API key and optional base url
+if (!process.env.FIRECRAWL_KEY) {
+  throw new Error('FIRECRAWL_KEY environment variable is not set or is empty');
+}
+
+log('Initializing Firecrawl with API key:', process.env.FIRECRAWL_KEY.substring(0, 8) + '...');
 
 const firecrawl = new FirecrawlApp({
-  apiKey: process.env.FIRECRAWL_KEY ?? '',
+  apiKey: process.env.FIRECRAWL_KEY,
   apiUrl: process.env.FIRECRAWL_BASE_URL,
 });
 
@@ -57,7 +62,7 @@ async function generateSerpQueries({
   researchLanguage: string;
 }) {
   const res = await generateObject({
-    model: o3MiniModel,
+    model: global.selectedModel,
     system: systemPrompt(),
     prompt: `
       Given the following prompt from the user, generate a list of SERP queries to research the topic.
@@ -113,7 +118,7 @@ async function processSerpResult({
   log(`Ran "${query}", found ${contents.length} contents`);
 
   const res = await generateObject({
-    model: o3MiniModel,
+    model: global.selectedModel,
     abortSignal: AbortSignal.timeout(60_000),
     system: systemPrompt(),
     prompt: `
@@ -162,7 +167,7 @@ export async function writeFinalReport({
   );
 
   const res = await generateObject({
-    model: o3MiniModel,
+    model: global.selectedModel,
     system: systemPrompt(),
     prompt: `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as detailed as possible, aim for 3 or more pages, include ALL the learnings from research. The report should be written in ${language}:\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from previous research:\n\n<learnings>\n${learningsString}\n</learnings>`,
     schema: z.object({
