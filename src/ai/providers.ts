@@ -11,6 +11,10 @@ interface CustomOpenAIProviderSettings {
   baseURL?: string;
 }
 
+interface CustomDeepseekProviderSettings {
+  baseURL?: string;
+}
+
 // Add delay utility
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -44,7 +48,8 @@ const mistral = process.env.MISTRAL_KEY
 const deepseek = process.env.DEEPSEEK_KEY
   ? createDeepseek({
       apiKey: process.env.DEEPSEEK_KEY,
-    })
+      baseURL: process.env.DEEPSEEK_BASE_URL,
+    } as CustomDeepseekProviderSettings)
   : null;
 
 // Default models for each provider
