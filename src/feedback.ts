@@ -32,7 +32,7 @@ export async function generateFeedback({
   };
 
   // Special handling for deepseek models which don't support JSON output
-  if (global.selectedModel?.includes('deepseek')) {
+  if (global.selectedModelType === 'deepseek') {
     delete options.schema;
     const response = await generateObject({
       ...options,
