@@ -12,7 +12,7 @@ export async function generateFeedback({
   numQuestions?: number;
   researchLanguage: string;
 }) {
-  const userFeedback = await generateObject({
+  const options = {
     model: global.selectedModel,
     system: systemPrompt(),
     prompt: `
@@ -29,7 +29,24 @@ export async function generateFeedback({
           `Follow up questions to clarify the research direction, max of ${numQuestions}`,
         ),
     }),
-  });
+  };
+
+  // Special handling for deepseek models which don't support JSON output
+  if (global.selectedModel?.includes('deepseek')) {
+    delete options.schema;
+    const response = await generateObject({
+      ...options,
+      prompt: `${options.prompt}\nPlease format your response as a JSON array of strings containing the questions.`,
+    });
+    try {
+      const parsed = JSON.parse(response as string);
+      return { questions: Array.isArray(parsed) ? parsed : parsed.questions };
+    } catch (e) {
+      throw new Error('Failed to parse deepseek response as JSON');
+    }
+  }
+
+  const userFeedback = await generateObject(options);
 
   return userFeedback.object.questions.slice(0, numQuestions);
 }
