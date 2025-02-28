@@ -1,14 +1,16 @@
+import * as fs from 'fs/promises';
+import path from 'path';
 import FirecrawlApp, { SearchResponse } from '@mendable/firecrawl-js';
-import search from './duckduckgo-search';
 import { generateObject } from 'ai';
 import { compact } from 'lodash-es';
 import pLimit from 'p-limit';
+import sanitize from 'sanitize-filename';
 import { z } from 'zod';
-import * as fs from 'fs/promises';
 
 import { trimPrompt } from './ai/providers';
-import { systemPrompt } from './prompt';
+import search from './duckduckgo-search';
 import { OutputManager } from './output-manager';
+import { systemPrompt } from './prompt';
 
 // Initialize output manager for coordinated console/progress output
 const output = new OutputManager();
@@ -41,7 +43,10 @@ if (!process.env.FIRECRAWL_KEY) {
   throw new Error('FIRECRAWL_KEY environment variable is not set or is empty');
 }
 
-log('Initializing Firecrawl with API key:', process.env.FIRECRAWL_KEY.substring(0, 8) + '...');
+log(
+  'Initializing Firecrawl with API key:',
+  process.env.FIRECRAWL_KEY.substring(0, 8) + '...',
+);
 
 const firecrawl = new FirecrawlApp({
   apiKey: process.env.FIRECRAWL_KEY,
@@ -100,10 +105,11 @@ async function generateSerpQueries({
   return res.object.queries.slice(0, numQueries);
 }
 
-import sanitize from 'sanitize-filename';
-import path from 'path';
 export function urlToFilepath(url: string): string {
-  return path.join('downloaded-urls', `${sanitize(url, { replacement: '-' })}.md`);
+  return path.join(
+    'downloaded-urls',
+    `${sanitize(url, { replacement: '-' })}.md`,
+  );
 }
 
 async function processSerpResult({
@@ -131,8 +137,10 @@ async function processSerpResult({
         `URL: ${doc.url}`,
         `Accessed at: ${Date()}`,
         '',
-        doc.markdown
-      ].filter(Boolean).join('\n');
+        doc.markdown,
+      ]
+        .filter(Boolean)
+        .join('\n');
 
       await fs.writeFile(urlToFilepath(doc.url), content, 'utf-8');
     }

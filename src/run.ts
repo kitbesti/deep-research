@@ -6,10 +6,10 @@ import * as path from 'path';
 import * as readline from 'readline';
 import { LanguageModel } from 'ai';
 
+import { getSelectedModel } from './ai/providers';
 import { deepResearch, writeFinalReport } from './deep-research';
 import { generateFeedback } from './feedback';
 import { OutputManager } from './output-manager';
-import { getSelectedModel } from './ai/providers';
 
 declare global {
   var selectedModel: LanguageModel;
@@ -74,18 +74,22 @@ const getAvailableModels = () => {
 // run the agent
 async function run() {
   const availableModels = getAvailableModels();
-  
+
   if (availableModels.length === 0) {
-    console.error('No AI providers configured. Please add at least one provider\'s API key to .env.local');
+    console.error(
+      "No AI providers configured. Please add at least one provider's API key to .env.local",
+    );
     process.exit(1);
   }
 
   // Get model selection
   const modelOptions = availableModels.join('/');
   const defaultModel = availableModels[0];
-  const modelType = await askQuestion(`Which model would you like to use? (${modelOptions}) [default: ${defaultModel}]: `);
+  const modelType = await askQuestion(
+    `Which model would you like to use? (${modelOptions}) [default: ${defaultModel}]: `,
+  );
   const selectedModelType = (modelType || defaultModel) as ModelType;
-  
+
   if (!availableModels.includes(selectedModelType)) {
     console.error(`Invalid model type. Please choose one of: ${modelOptions}`);
     rl.close();
@@ -110,7 +114,7 @@ async function run() {
     )) || 'English';
 
   const outputFile = 'output.md';
-  
+
   // Get breath and depth parameters
   const breadth =
     parseInt(
@@ -158,7 +162,7 @@ ${followUpQuestions.map((q: string, i: number) => `Q: ${q}\nA: ${answers[i]}`).j
   log('\nResearching your topic...');
 
   log('\nStarting research with progress tracking...\n');
-  
+
   const { learnings, visitedUrls } = await deepResearch({
     query: combinedQuery,
     breadth,
@@ -183,7 +187,7 @@ ${followUpQuestions.map((q: string, i: number) => `Q: ${q}\nA: ${answers[i]}`).j
   })}`;
 
   // Create reports directory if it doesn't exist
-  const reportsDir = 'deep-research-reports';  // Fixed directory for all research reports
+  const reportsDir = 'deep-research-reports'; // Fixed directory for all research reports
   await ensureDir(reportsDir);
   log(`\nCreating research report in directory: ${reportsDir}`);
 
