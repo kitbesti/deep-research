@@ -54,7 +54,7 @@ function askQuestion(query: string): Promise<string> {
   });
 }
 
-type ModelType = 'openai' | 'google' | 'azure' | 'mistral';
+type ModelType = 'openai' | 'google' | 'azure' | 'mistral' | 'deepseek';
 
 // Get available models
 const getAvailableModels = () => {
@@ -63,6 +63,7 @@ const getAvailableModels = () => {
     google: Boolean(process.env.GOOGLE_KEY),
     azure: Boolean(process.env.AZURE_KEY && process.env.AZURE_RESOURCE_NAME),
     mistral: Boolean(process.env.MISTRAL_KEY),
+    deepseek: Boolean(process.env.DEEPSEEK_KEY),
   };
 
   return Object.entries(models)

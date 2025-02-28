@@ -2,6 +2,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createAzure } from '@ai-sdk/azure';
 import { createMistral } from '@ai-sdk/mistral';
+import { createDeepseek } from '@ai-sdk/deepseek';
 import { getEncoding } from 'js-tiktoken';
 
 import { RecursiveCharacterTextSplitter } from './text-splitter';
@@ -40,11 +41,18 @@ const mistral = process.env.MISTRAL_KEY
     })
   : null;
 
+const deepseek = process.env.DEEPSEEK_KEY
+  ? createDeepseek({
+      apiKey: process.env.DEEPSEEK_KEY,
+    })
+  : null;
+
 // Default models for each provider
 const customModel = process.env.OPENAI_MODEL || 'o3-mini';
 const customGoogleModel = process.env.GOOGLE_MODEL || 'gemini-2.0-pro-exp-02-05';
 const customAzureModel = process.env.AZURE_MODEL || 'gpt-4o-mini';
 const customMistralModel = process.env.MISTRAL_MODEL || 'mistral-large-latest';
+const customDeepseekModel = process.env.DEEPSEEK_MODEL || 'deepseek-r1-chat';
 
 // Models - only initialize if provider is configured
 export const o3MiniModel = openai
@@ -68,8 +76,10 @@ export const azureModel = azure
 
 export const mistralModel = mistral ? mistral(customMistralModel) : null;
 
+export const deepseekModel = deepseek ? deepseek(customDeepseekModel) : null;
+
 // Export a function to get the selected model
-export function getSelectedModel(modelType: 'openai' | 'google' | 'azure' | 'mistral') {
+export function getSelectedModel(modelType: 'openai' | 'google' | 'azure' | 'mistral' | 'deepseek') {
   switch (modelType) {
     case 'openai':
       if (!o3MiniModel) throw new Error('OpenAI is not configured');
@@ -83,6 +93,9 @@ export function getSelectedModel(modelType: 'openai' | 'google' | 'azure' | 'mis
     case 'mistral':
       if (!mistralModel) throw new Error('Mistral AI is not configured');
       return mistralModel;
+    case 'deepseek':
+      if (!deepseekModel) throw new Error('Deepseek AI is not configured');
+      return deepseekModel;
     default:
       throw new Error('Invalid model type');
   }
